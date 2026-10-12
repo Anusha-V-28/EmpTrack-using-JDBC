@@ -1,0 +1,283 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Management Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+
+        .form-section, .list-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 6px 0;
+        }
+
+        input {
+            width: 95%;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #e8eef7;
+        }
+
+        .logout {
+            float: right;
+        }
+
+        #message {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>Employee Management System</h1>
+
+        <a class="logout" href="login.html">Logout</a>
+
+        <h2>Dashboard</h2>
+        <p id="message">Loading employee records...</p>
+
+        <section class="form-section">
+            <h2>Add Employee</h2>
+
+            <form id="employeeForm" onsubmit="addEmployee(event)">
+                <label for="name">Employee Name</label><br>
+                <input type="text" id="name" required><br>
+
+                <label for="department">Department</label><br>
+                <input type="text" id="department" required><br>
+
+                <label for="salary">Salary</label><br>
+                <input type="number" id="salary" min="0"
+                       step="0.01" required><br>
+
+                <button type="submit">Add Employee</button>
+            </form>
+        </section>
+
+        <section class="list-section">
+            <h2>Employee Records</h2>
+
+            <button type="button" onclick="loadEmployees()">
+                Refresh Employees
+            </button>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Department</th>
+                        <th>Salary</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody id="employeeTable">
+                </tbody>
+            </table>
+        </section>
+
+    </div>
+
+    <script>
+        function showMessage(message) {
+            document.getElementById("message").textContent = message;
+        }
+
+        async function loadEmployees() {
+            try {
+                const response = await fetch("/api/employees");
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not load employees.");
+                }
+
+                const table = document.getElementById("employeeTable");
+                table.replaceChildren();
+
+                data.employees.forEach(employee => {
+                    const row = document.createElement("tr");
+
+                    [
+                        employee.id,
+                        employee.name,
+                        employee.department,
+                        employee.salary
+                    ].forEach(value => {
+                        const cell = document.createElement("td");
+                        cell.textContent = value;
+                        row.appendChild(cell);
+                    });
+
+                    const actions = document.createElement("td");
+
+                    const updateButton = document.createElement("button");
+                    updateButton.textContent = "Update";
+                    updateButton.onclick = () => updateEmployee(employee);
+
+                    const deleteButton = document.createElement("button");
+                    deleteButton.textContent = "Delete";
+                    deleteButton.onclick = () => deleteEmployee(employee.id);
+
+                    actions.appendChild(updateButton);
+                    actions.appendChild(deleteButton);
+                    row.appendChild(actions);
+
+                    table.appendChild(row);
+                });
+
+                showMessage(
+                    "Employee records loaded: " + data.employees.length
+                );
+
+            } catch (error) {
+                showMessage("Error: " + error.message);
+            }
+        }
+
+        async function addEmployee(event) {
+            event.preventDefault();
+
+            const formData = new URLSearchParams({
+                name: document.getElementById("name").value.trim(),
+                department: document.getElementById("department").value.trim(),
+                salary: document.getElementById("salary").value
+            });
+
+            try {
+                const response = await fetch("/api/employees/add", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData.toString()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not add employee.");
+                }
+
+                document.getElementById("employeeForm").reset();
+                showMessage(data.message);
+                await loadEmployees();
+
+            } catch (error) {
+                showMessage("Error: " + error.message);
+            }
+        }
+
+        async function updateEmployee(employee) {
+            const name = prompt("Enter new name:", employee.name);
+            if (name === null) return;
+
+            const department = prompt(
+                "Enter new department:", employee.department
+            );
+            if (department === null) return;
+
+            const salary = prompt(
+                "Enter new salary:", employee.salary
+            );
+            if (salary === null) return;
+
+            const formData = new URLSearchParams({
+                id: employee.id,
+                name: name.trim(),
+                department: department.trim(),
+                salary: salary.trim()
+            });
+
+            try {
+                const response = await fetch("/api/employees/update", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData.toString()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not update employee.");
+                }
+
+                showMessage(data.message);
+                await loadEmployees();
+
+            } catch (error) {
+                showMessage("Error: " + error.message);
+            }
+        }
+
+        async function deleteEmployee(id) {
+            if (!confirm("Are you sure you want to delete employee ID " + id + "?")) {
+                return;
+            }
+
+            try {
+                const response = await fetch("/api/employees/delete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: new URLSearchParams({ id: id }).toString()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not delete employee.");
+                }
+
+                showMessage(data.message);
+                await loadEmployees();
+
+            } catch (error) {
+                showMessage("Error: " + error.message);
+            }
+        }
+
+        loadEmployees();
+    </script>
+
+</body>
+</html>
